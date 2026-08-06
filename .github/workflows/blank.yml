@@ -1,0 +1,53 @@
+name: Dynamic Docker Image Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      src_image:
+        description: '源镜像地址 (Source Image)'
+        required: true
+        default: 'hiyouga/llamafactory:latest'
+      dest_image:
+        description: '目标镜像地址 (Destination Image)'
+        required: true
+        default: 'registry.cnbita.com:5000/hero-dev/llamafactory:latest'
+      dest_user:
+        description: '目标仓库用户名 (Destination Username)'
+        required: true
+        default: 'admin'
+      dest_pass:
+        description: '目标仓库密码 (Destination Password)'
+        required: true
+        default: 'harboradmin'
+
+jobs:
+  sync-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Skopeo
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+
+      - name: Sync Image
+        run: |
+          # 格式化源镜像地址，补全 docker:// 前缀
+          SRC_IMAGE="${{ github.event.inputs.src_image }}"
+          if [[ $SRC_IMAGE != docker://* ]]; then
+            SRC_IMAGE="docker://$SRC_IMAGE"
+          fi
+
+          # 格式化目标镜像地址，补全 docker:// 前缀
+          DEST_IMAGE="${{ github.event.inputs.dest_image }}"
+          if [[ $DEST_IMAGE != docker://* ]]; then
+            DEST_IMAGE="docker://$DEST_IMAGE"
+          fi
+
+          echo "Starting copy from $SRC_IMAGE to $DEST_IMAGE..."
+
+          # 执行高效同步（禁用目标 TLS 验证以兼容 HTTP 或自签名证书）
+          skopeo copy \
+            --dest-tls-verify=false \
+            --dest-creds="${{ github.event.inputs.dest_user }}:${{ github.event.inputs.dest_pass }}" \
+            $SRC_IMAGE \
+            $DEST_IMAGE
